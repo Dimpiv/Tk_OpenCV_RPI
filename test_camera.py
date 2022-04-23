@@ -1,8 +1,9 @@
 import argparse
 import datetime
-import tkinter as tk
 import logging
 import os
+import time
+import tkinter as tk
 
 import cv2
 from PIL import Image, ImageTk
@@ -16,74 +17,105 @@ logging.basicConfig(
 )
 
 
+class CamCV:
+    """ Получение и Обрабока видеопотока с камеры"""
+    def __init__(self):
+        self.log = logging.getLogger("Cam_app")
+        self.prev_frame_time = 0
+        self.fps_value = None
+
+        self.log.debug("Init Camera in OpenCV")
+        self.cam = cv2.VideoCapture(0)
+
+        self.log.debug(f"Set video size for camera: {WIGHT}X{HEIGHT}")
+        self.cam.set(3, WIGHT)
+        self.cam.set(4, HEIGHT)
+        self.cam.set(15, 0.1)
+
+    def __del__(self):
+        """ Закрываем поток с камеры """
+        self.cam.release()
+
+    def video_frame(self):
+        """ Отдет фрейм из видео потока"""
+        ok, frame = self.cam.read()
+        if ok:
+            new_frame_time = time.time()
+            self.fps_value = 1/(new_frame_time-self.prev_frame_time)
+            self.prev_frame_time = new_frame_time
+            return ok, cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)  # convert colors from BGR to RGBA
+        return None, None
+
+    def get_fps(self):
+        return int(self.fps_value)
+
+
 class Application:
     def __init__(self, output_path="./"):
         self.logger = logging.getLogger("Main_app")
-        self.logger.debug("Init Camera in OpenCV")
-        self.vs = cv2.VideoCapture(0)
-
-        self.logger.debug(f"Set video size for camera: {WIGHT}X{HEIGHT}")
-        self.vs.set(3, WIGHT)
-        self.vs.set(4, HEIGHT)
-        self.vs.set(15, 0.05)
+        self.vs = CamCV()
 
         self.output_path = output_path  # store output path
-        self.current_image = None       # current image from the camera
+        self.current_image = None  # current image from the camera
         self.logger.debug(f"Output path for save file: {self.output_path}")
 
         self.root = tk.Tk()
-        self.root.title("Тест камер вместе с OpenCV")
+        self.root.title("Тест камер с OpenCV")
 
         self.root.protocol('WM_DELETE_WINDOW', self.destructor)
 
         self.panel = tk.Label(self.root)
         self.panel.pack(side=tk.LEFT, expand=True, padx=5, pady=5)
 
+        self.string_fps = tk.StringVar()
+        self.label_fps = tk.Label(self.root, textvariable=self.string_fps)
+        self.label_fps.pack(fill=tk.BOTH, padx=5, pady=1)
+
         self.text = tk.Text(self.root)
-        self.text.pack(fill=tk.BOTH)
-        self.text.insert('1.0', 'This is a Text widget demo')
+        self.text.pack(fill=tk.BOTH, padx=5, pady=1)
 
         btn = tk.Button(self.root, text="Сохранить кадр", command=self.take_snapshot)
-        btn.pack(fill=tk.BOTH)
+        btn.pack(fill=tk.BOTH, padx=10, pady=5)
 
         btn = tk.Button(self.root, text="Записать видео", command=self.take_video)
-        btn.pack(fill=tk.BOTH)
+        btn.pack(fill=tk.BOTH, padx=10, pady=5)
+
+        self.string_fps.set("FPS: 0")
 
         self.video_loop()
 
     def video_loop(self):
-        """ Get frame from the video stream and show it in Tkinter """
-        ok, frame = self.vs.read()  # read frame from video stream
-        if ok:  # frame captured without any errors
-            cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)  # convert colors from BGR to RGBA
-            self.current_image = Image.fromarray(cv2image)  # convert image for PIL
-            imgtk = ImageTk.PhotoImage(image=self.current_image)  # convert image for tkinter
-            self.panel.imgtk = imgtk  # anchor imgtk so it does not be deleted by garbage-collector
-            self.panel.config(image=imgtk)  # show the image
-        self.root.after(10, self.video_loop)  # call the same function after 30 milliseconds
+        """ Получаем видеофрейм из потока, конвертируем для отображения и открываем его в Tkinter  """
+        ok, cv2image = self.vs.video_frame()
+        if ok:
+            self.current_image = Image.fromarray(cv2image)          # convert image for PIL
+            imgtk = ImageTk.PhotoImage(image=self.current_image)    # convert image for tkinter
+            self.panel.imgtk = imgtk                                # anchor imgtk so it does not be deleted by garbage-collector
+            self.panel.config(image=imgtk)                          # show the image
+        self.root.after(20, self.video_loop)                        # call the same function after 30 milliseconds
+        self.string_fps.set(f"FPS: {self.vs.get_fps()}")
 
     def take_snapshot(self):
-        """ Take snapshot and save it to the file """
-        ts = datetime.datetime.now()  # grab the current timestamp
+        """ Сохраняем кадр в качестве имени timestamp """
+        ts = datetime.datetime.now()
         filename = "{}.jpg".format(ts.strftime("%Y-%m-%d_%H-%M-%S"))  # construct filename
         self.logger.debug(f"Write snapshot to: {self.output_path}{filename}")
         p = os.path.join(self.output_path, filename)  # construct output path
         snap = self.current_image.convert('RGB')
-        snap.save(p, "JPEG")  # save image as jpeg file
-        print("[INFO] saved {}".format(filename))
+        snap.save(p, "JPEG")
+        self.text.insert(tk.END, f"Сохранен файл: {filename}" + "\n")
+        self.logger.info(f"Сохранен файл: {self.output_path}{filename}")
 
     def take_video(self):
         self.logger.debug(f"Write video sample to: {self.output_path}")
 
     def destructor(self):
-        """ Destroy the root object and release all resources """
-        print("[INFO] closing...")
+        """ Завершаем все процессы """
+        self.logger.info("Закрытие программы")
         self.root.destroy()
-        self.vs.release()        # release web camera
-        cv2.destroyAllWindows()  # it is not mandatory in this application
+        cv2.destroyAllWindows()
 
 
-# construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("-o", "--output", default="./",
                 help="path to output directory to store snapshots (default: current folder")
