@@ -11,7 +11,8 @@ import cv2
 from PIL import Image, ImageTk
 
 LOG_FORMAT = "%(levelname)-8s %(name)-12s %(message)s"
-WIGHT, HEIGHT = (640, 480)
+WIGHT, HEIGHT = (640, 480)  # Очень медленный FPS
+# WIGHT, HEIGHT = (320, 240)      # Работает быстрее
 
 logging.basicConfig(level=logging.DEBUG, format=LOG_FORMAT)
 
@@ -23,6 +24,7 @@ class CamCV:
         self.log = logging.getLogger("Cam_app")
         self.prev_frame_time = 0
         self.fps_value = None
+        self.face_detect = False
 
         self.log.debug("Init Camera in OpenCV")
         self.cam = cv2.VideoCapture(0)
@@ -30,7 +32,7 @@ class CamCV:
         self.log.debug(f"Set video size for camera: {WIGHT}X{HEIGHT}")
         self.cam.set(3, WIGHT)
         self.cam.set(4, HEIGHT)
-        self.cam.set(15, 0.01)
+        self.cam.set(15, 0.1)
 
         self.face_cascade = cv2.CascadeClassifier("./haarcascade_frontalface_default.xml")
 
@@ -45,21 +47,32 @@ class CamCV:
             new_frame_time = time.time()
             self.fps_value = 1 / (new_frame_time - self.prev_frame_time)
             self.prev_frame_time = new_frame_time
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+            small_frame = cv2.resize(frame, (320, 240))
+            gray = cv2.cvtColor(small_frame, cv2.COLOR_BGR2GRAY)
             faces = self.face_cascade.detectMultiScale(
                 gray,
                 scaleFactor=1.1,
                 minNeighbors=5,
                 minSize=(30, 30),
             )
-            for (x, y, w, h) in faces:
-                cv2.rectangle(frame, (x, y - 10), (x + w + 30, y + h + 30), (67, 219, 62), 1)
+
+            if not isinstance(faces, tuple):
+                self.face_detect = True
+            else:
+                self.face_detect = False
+
+            # for (x, y, w, h) in faces:
+            #     cv2.rectangle(frame, (x, y - 10), (x + w + 30, y + h + 30), (67, 219, 62), 1)
 
             return ok, cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)  # convert colors from BGR to RGBA
         return None, None
 
     def get_fps(self):
         return int(self.fps_value)
+
+    def get_face_detect(self):
+        return self.face_detect
 
 
 class Application:
@@ -95,6 +108,7 @@ class Application:
         self.string_fps.set("FPS: 0")
 
         self.video_loop()
+        self.log_faces()
 
     def video_loop(self):
         """Получаем видеофрейм из потока, конвертируем для отображения и открываем его в Tkinter"""
@@ -104,8 +118,15 @@ class Application:
             imgtk = ImageTk.PhotoImage(image=self.current_image)  # convert image for tkinter
             self.panel.imgtk = imgtk  # anchor imgtk so it does not be deleted by garbage-collector
             self.panel.config(image=imgtk)  # show the image
-        self.root.after(10, self.video_loop)  # call the same function after 30 milliseconds
+        self.root.after(30, self.video_loop)  # call the same function after 30 milliseconds
         self.string_fps.set(f"FPS: {self.vs.get_fps()}")
+
+    def log_faces(self):
+        """Проверяет статус обнаружения объекта (Лица)"""
+        if self.vs.get_face_detect():
+            ts = datetime.datetime.now()
+            self.text.insert(tk.END, "{} - Лицо в кадре!\n".format(ts.strftime("%H-%M-%S")))
+        self.root.after(1000, self.log_faces)
 
     def take_snapshot(self):
         """Сохраняем кадр в качестве имени timestamp"""
