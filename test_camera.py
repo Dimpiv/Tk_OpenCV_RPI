@@ -4,6 +4,8 @@ import argparse
 import datetime
 import logging
 import os
+import queue
+import threading
 import time
 import tkinter as tk
 
@@ -11,10 +13,36 @@ import cv2
 from PIL import Image, ImageTk
 
 LOG_FORMAT = "%(levelname)-8s %(name)-12s %(message)s"
-WIGHT, HEIGHT = (640, 480)  # Очень медленный FPS
-# WIGHT, HEIGHT = (320, 240)      # Работает быстрее
+WIGHT, HEIGHT = (640, 480)
 
 logging.basicConfig(level=logging.DEBUG, format=LOG_FORMAT)
+
+
+class FaceDetection:
+    """Класс распознавателя лица для работы в отдельном потоке"""
+
+    def __init__(self):
+        self.q = queue.Queue()
+        self.face_cascade = cv2.CascadeClassifier("./haarcascade_frontalface_default.xml")
+        self.face_detect = False
+
+    def worker(self):
+        while True:
+            frame = self.q.get()
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = self.face_cascade.detectMultiScale(
+                gray,
+                scaleFactor=1.1,
+                minNeighbors=5,
+                minSize=(30, 30),
+            )
+
+            if not isinstance(faces, tuple):
+                self.face_detect = True
+            else:
+                self.face_detect = False
+
+            self.q.task_done()
 
 
 class CamCV:
@@ -24,7 +52,6 @@ class CamCV:
         self.log = logging.getLogger("Cam_app")
         self.prev_frame_time = 0
         self.fps_value = None
-        self.face_detect = False
 
         self.log.debug("Init Camera in OpenCV")
         self.cam = cv2.VideoCapture(0)
@@ -34,8 +61,10 @@ class CamCV:
         self.cam.set(4, HEIGHT)
         self.cam.set(5, 30)
 
-        self.face_cascade = cv2.CascadeClassifier("./haarcascade_frontalface_default.xml")
         self.counter = 0
+
+        self.face_detection_worker = FaceDetection()
+        threading.Thread(target=self.face_detection_worker.worker, daemon=True).start()
 
     def __del__(self):
         """Закрываем поток с камеры"""
@@ -44,28 +73,15 @@ class CamCV:
     def video_frame(self):
         """Отдет фрейм из видео потока"""
         ok, frame = self.cam.read()
-        self.counter += 1
         if ok:
+            self.counter += 1
             new_frame_time = time.time()
             self.fps_value = 1 / (new_frame_time - self.prev_frame_time)
             self.prev_frame_time = new_frame_time
 
-            if self.counter >= 15:          #TODO Запустить в другом потоке
+            if self.counter >= 30:
+                self.face_detection_worker.q.put(frame)
                 self.counter = 0
-
-                small_frame = cv2.resize(frame, (320, 240))
-                gray = cv2.cvtColor(small_frame, cv2.COLOR_BGR2GRAY)
-                faces = self.face_cascade.detectMultiScale(
-                    gray,
-                    scaleFactor=1.1,
-                    minNeighbors=5,
-                    minSize=(30, 30),
-                )
-
-                if not isinstance(faces, tuple):
-                    self.face_detect = True
-                else:
-                    self.face_detect = False
 
             return ok, cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)  # convert colors from BGR to RGBA
         return None, None
@@ -74,7 +90,7 @@ class CamCV:
         return int(self.fps_value)
 
     def get_face_detect(self):
-        return self.face_detect
+        return self.face_detection_worker.face_detect
 
 
 class Application:
@@ -120,7 +136,7 @@ class Application:
             imgtk = ImageTk.PhotoImage(image=self.current_image)  # convert image for tkinter
             self.panel.imgtk = imgtk  # anchor imgtk so it does not be deleted by garbage-collector
             self.panel.config(image=imgtk)  # show the image
-        self.root.after(1, self.video_loop)  # call the same function after 30 milliseconds
+        self.root.after(5, self.video_loop)  # call the same function after 5 milliseconds
         self.string_fps.set(f"FPS: {self.vs.get_fps()}")
 
     def log_faces(self):
