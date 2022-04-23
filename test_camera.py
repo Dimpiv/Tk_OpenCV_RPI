@@ -30,7 +30,9 @@ class CamCV:
         self.log.debug(f"Set video size for camera: {WIGHT}X{HEIGHT}")
         self.cam.set(3, WIGHT)
         self.cam.set(4, HEIGHT)
-        self.cam.set(15, 0.1)
+        self.cam.set(15, 0.01)
+
+        self.face_cascade = cv2.CascadeClassifier("./haarcascade_frontalface_default.xml")
 
     def __del__(self):
         """Закрываем поток с камеры"""
@@ -43,6 +45,16 @@ class CamCV:
             new_frame_time = time.time()
             self.fps_value = 1 / (new_frame_time - self.prev_frame_time)
             self.prev_frame_time = new_frame_time
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = self.face_cascade.detectMultiScale(
+                gray,
+                scaleFactor=1.1,
+                minNeighbors=5,
+                minSize=(30, 30),
+            )
+            for (x, y, w, h) in faces:
+                cv2.rectangle(frame, (x, y - 10), (x + w + 30, y + h + 30), (67, 219, 62), 1)
+
             return ok, cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)  # convert colors from BGR to RGBA
         return None, None
 
@@ -92,7 +104,7 @@ class Application:
             imgtk = ImageTk.PhotoImage(image=self.current_image)  # convert image for tkinter
             self.panel.imgtk = imgtk  # anchor imgtk so it does not be deleted by garbage-collector
             self.panel.config(image=imgtk)  # show the image
-        self.root.after(20, self.video_loop)  # call the same function after 30 milliseconds
+        self.root.after(10, self.video_loop)  # call the same function after 30 milliseconds
         self.string_fps.set(f"FPS: {self.vs.get_fps()}")
 
     def take_snapshot(self):
