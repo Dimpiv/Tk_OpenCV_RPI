@@ -1,42 +1,54 @@
 import argparse
 import datetime
-import os
 import tkinter as tk
+import logging
+import os
 
 import cv2
 from PIL import Image, ImageTk
 
+LOG_FORMAT = '%(levelname)-8s %(name)-12s %(message)s'
+WIGHT, HEIGHT = (640, 480)
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format=LOG_FORMAT
+)
+
 
 class Application:
     def __init__(self, output_path="./"):
-        """ Initialize application which uses OpenCV + Tkinter. It displays
-            a video stream in a Tkinter window and stores current snapshot on disk """
-        self.vs = cv2.VideoCapture(0)  # capture video frames, 0 is your default video camera
-        self.vs.set(3, 640)
-        self.vs.set(4, 480)
+        self.logger = logging.getLogger("Main_app")
+        self.logger.debug("Init Camera in OpenCV")
+        self.vs = cv2.VideoCapture(0)
+
+        self.logger.debug(f"Set video size for camera: {WIGHT}X{HEIGHT}")
+        self.vs.set(3, WIGHT)
+        self.vs.set(4, HEIGHT)
         self.vs.set(15, 0.05)
 
         self.output_path = output_path  # store output path
-        self.current_image = None  # current image from the camera
+        self.current_image = None       # current image from the camera
+        self.logger.debug(f"Output path for save file: {self.output_path}")
 
-        self.root = tk.Tk()  # initialize root window
-        self.root.title("Test Camera with OpenCV")  # set window title
+        self.root = tk.Tk()
+        self.root.title("Тест камер вместе с OpenCV")
 
-        # self.destructor function gets fired when the window is closed
         self.root.protocol('WM_DELETE_WINDOW', self.destructor)
 
-        self.panel = tk.Label(self.root)  # initialize image panel
+        self.panel = tk.Label(self.root)
         self.panel.pack(side=tk.LEFT, expand=True, padx=5, pady=5)
 
         self.text = tk.Text(self.root)
         self.text.pack(fill=tk.BOTH)
         self.text.insert('1.0', 'This is a Text widget demo')
 
-        btn = tk.Button(self.root, text="Snapshot!", command=self.take_snapshot)
+        btn = tk.Button(self.root, text="Сохранить кадр", command=self.take_snapshot)
         btn.pack(fill=tk.BOTH)
 
-        # start a self.video_loop that constantly pools the video sensor
-        # for the most recently read frame
+        btn = tk.Button(self.root, text="Записать видео", command=self.take_video)
+        btn.pack(fill=tk.BOTH)
+
         self.video_loop()
 
     def video_loop(self):
@@ -54,16 +66,20 @@ class Application:
         """ Take snapshot and save it to the file """
         ts = datetime.datetime.now()  # grab the current timestamp
         filename = "{}.jpg".format(ts.strftime("%Y-%m-%d_%H-%M-%S"))  # construct filename
+        self.logger.debug(f"Write snapshot to: {self.output_path}{filename}")
         p = os.path.join(self.output_path, filename)  # construct output path
         snap = self.current_image.convert('RGB')
         snap.save(p, "JPEG")  # save image as jpeg file
         print("[INFO] saved {}".format(filename))
 
+    def take_video(self):
+        self.logger.debug(f"Write video sample to: {self.output_path}")
+
     def destructor(self):
         """ Destroy the root object and release all resources """
         print("[INFO] closing...")
         self.root.destroy()
-        self.vs.release()  # release web camera
+        self.vs.release()        # release web camera
         cv2.destroyAllWindows()  # it is not mandatory in this application
 
 
@@ -73,7 +89,5 @@ ap.add_argument("-o", "--output", default="./",
                 help="path to output directory to store snapshots (default: current folder")
 args = vars(ap.parse_args())
 
-# start the app
-print("[INFO] starting...")
 pba = Application(args["output"])
 pba.root.mainloop()
