@@ -76,7 +76,7 @@ class CamCV:
         return self.frame
 
     def video_loop(self):
-        """ Чтение потока с камеры """
+        """Чтение потока с камеры"""
         while self.run:
             ok, frame = self.cam.read()
             if ok:
@@ -112,10 +112,12 @@ class Application:
         btn = tk.Button(self.root, text="Сохранить кадр", command=self.take_snapshot)
         btn.pack(fill=tk.BOTH, padx=10, pady=5)
 
-        btn = tk.Button(self.root, text=f"Записать видео {VIDEO_SAMPLE_LONG} сек. (СТОП ПРОСМОТР)", command=self.take_video)
+        btn = tk.Button(
+            self.root, text=f"Записать видео {VIDEO_SAMPLE_LONG} сек. (СТОП ПРОСМОТР)", command=self.take_video
+        )
         btn.pack(fill=tk.BOTH, padx=10, pady=5)
 
-        self.frame_counter = 0      # For Face Detection
+        self.frame_counter = 0  # For Face Detection
         self.face_detection_worker = FaceDetection()
         threading.Thread(target=self.face_detection_worker.worker, daemon=True).start()
 
@@ -124,14 +126,14 @@ class Application:
         self.face_detection()
 
     def main_video_loop(self):
-        """Получаем видеофрейм из потока """
-        if self.signal_take_snapshot:                   # Запись Скриншота
+        """Получаем видеофрейм из потока"""
+        if self.signal_take_snapshot:  # Запись Скриншота
             self._save_snapshot()
             self.signal_take_snapshot = False
-        if self.signal_take_video_sample:               # Запись Видеосемпла
+        if self.signal_take_video_sample:  # Запись Видеосемпла
             self._save_video()
             self.signal_take_video_sample = False
-        else:                                         # Отправляем кадры на общий поток с распознаванием и в Tkinter
+        else:  # Отправляем кадры на общий поток с распознаванием и в Tkinter
             self._show_video()
         self.root.after(10, self.main_video_loop)
 
@@ -144,17 +146,17 @@ class Application:
         self.root.after(250, self.log_faces)
 
     def face_detection(self):
-        """ Отправляет в очередь на распознования лица в кадре """
+        """Отправляет в очередь на распознования лица в кадре"""
         frame = self.vs.video_frame()
-        self.face_detection_worker.q.put(frame)     # Отправляем в очередь на распознование каждые 1 сек.
+        self.face_detection_worker.q.put(frame)  # Отправляем в очередь на распознование каждые 1 сек.
         self.root.after(1000, self.face_detection)
 
     def take_snapshot(self):
-        """ Сигнал для сохранения скриншота """
+        """Сигнал для сохранения скриншота"""
         self.signal_take_snapshot = True
 
     def _save_snapshot(self):
-        """ Сохраняет скриншот в качестве имени timestamp """
+        """Сохраняет скриншот в качестве имени timestamp"""
         frame = self.vs.video_frame()
         cv2_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
         image = Image.fromarray(cv2_frame)
@@ -171,14 +173,14 @@ class Application:
         self.logger.debug(f"Сохранен файл изображение: {self.output_path}{filename}")
 
     def take_video(self):
-        """ Сигнал для запуска записи видео """
+        """Сигнал для запуска записи видео"""
         self.signal_take_video_sample = True
 
     def _save_video(self):
-        """ Сохраняет видео в качестве имени timestamp  !!! BAD БЛОКИРУЮЩИЙ МЕТОД"""
+        """Сохраняет видео в качестве имени timestamp  !!! BAD БЛОКИРУЮЩИЙ МЕТОД"""
         ts = datetime.datetime.now()
         filename = "{}.avi".format(ts.strftime("%Y-%m-%d_%H-%M-%S"))
-        video_out = cv2.VideoWriter(filename, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'), FPS, (WIGHT, HEIGHT))
+        video_out = cv2.VideoWriter(filename, cv2.VideoWriter_fourcc("M", "J", "P", "G"), FPS, (WIGHT, HEIGHT))
         self.logger.debug("Старт записи видео!")
         self.text.insert(tk.END, f"Идет запись видео семпла - {VIDEO_SAMPLE_LONG} секунд" + "\n")
 
@@ -193,10 +195,10 @@ class Application:
         self.logger.info(f"Сохранен файл видео: {self.output_path}{filename}")
 
     def _show_video(self):
-        """ Передает полученный фрейм видеопотка в Tkinter """
+        """Передает полученный фрейм видеопотка в Tkinter"""
         frame = self.vs.video_frame()
         # cv2_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
-        cv2_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)      # Вроде работает пошустрее ???
+        cv2_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)  # Вроде работает пошустрее ???
         self.current_image = Image.fromarray(cv2_frame)
         imgtk = ImageTk.PhotoImage(image=self.current_image)
         self.panel.imgtk = imgtk
