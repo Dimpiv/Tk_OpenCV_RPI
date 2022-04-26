@@ -8,6 +8,7 @@ import queue
 import threading
 import tkinter as tk
 import cv2
+import sys
 from PIL import Image, ImageTk
 
 LOG_FORMAT = "%(levelname)-8s %(name)-12s %(message)s"
@@ -50,6 +51,7 @@ class CamCV:
 
     def __init__(self):
         self.log = logging.getLogger("Cam_app")
+        self.run = True
 
         self.cam = cv2.VideoCapture(0)
         if not self.cam.isOpened():
@@ -66,6 +68,7 @@ class CamCV:
 
     def __del__(self):
         """Закрываем поток с камеры"""
+        self.run = False
         self.cam.release()
 
     def video_frame(self):
@@ -74,7 +77,7 @@ class CamCV:
 
     def video_loop(self):
         """ Чтение потока с камеры """
-        while True:
+        while self.run:
             ok, frame = self.cam.read()
             if ok:
                 self.frame = frame
@@ -202,8 +205,10 @@ class Application:
     def destructor(self):
         """Завершаем все процессы"""
         self.logger.info("Закрытие программы")
+        self.vs.run = False
         self.root.destroy()
         cv2.destroyAllWindows()
+        sys.exit(0)
 
 
 ap = argparse.ArgumentParser()
