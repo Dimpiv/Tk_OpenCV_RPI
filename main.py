@@ -5,10 +5,11 @@ import datetime
 import logging
 import os
 import queue
+import sys
 import threading
 import tkinter as tk
+
 import cv2
-import sys
 from PIL import Image, ImageTk
 
 LOG_FORMAT = "%(levelname)-8s %(name)-12s %(message)s"
