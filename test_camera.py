@@ -53,6 +53,9 @@ class CamCV:
         self.log = logging.getLogger("Cam_app")
 
         self.cam = cv2.VideoCapture(0)
+        if not self.cam.isOpened():
+            raise ValueError("Не удается открыть поток с камеры", self.cam)
+
         self.frame = None
 
         self.log.debug(f"Установленное разрешение камеры: {WIGHT}X{HEIGHT}")
