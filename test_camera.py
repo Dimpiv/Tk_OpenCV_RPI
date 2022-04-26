@@ -55,7 +55,7 @@ class CamCV:
         self.cam = cv2.VideoCapture(0)
         self.frame = None
 
-        self.log.debug(f"Set video size for camera: {WIGHT}X{HEIGHT}")
+        self.log.debug(f"Установленное разрешение камеры: {WIGHT}X{HEIGHT}")
         self.cam.set(3, WIGHT)
         self.cam.set(4, HEIGHT)
         self.cam.set(5, FPS)
@@ -157,7 +157,7 @@ class Application:
 
         ts = datetime.datetime.now()
         filename = "{}.jpg".format(ts.strftime("%Y-%m-%d_%H-%M-%S"))
-        self.logger.debug(f"Write snapshot to: {self.output_path}{filename}")
+        self.logger.debug(f"Файл сохранен в: {self.output_path}{filename}")
         p = os.path.join(self.output_path, filename)
 
         snap.save(p, "JPEG")
