@@ -54,11 +54,14 @@ class CamCV:
 
         self.log.debug("Init Camera in OpenCV")
         self.cam = cv2.VideoCapture(0)
+        self.frame = None
 
         self.log.debug(f"Set video size for camera: {WIGHT}X{HEIGHT}")
         self.cam.set(3, WIGHT)
         self.cam.set(4, HEIGHT)
         self.cam.set(5, FPS)
+
+        threading.Thread(target=self.video_loop, daemon=True).start()
 
     def __del__(self):
         """Закрываем поток с камеры"""
@@ -66,7 +69,14 @@ class CamCV:
 
     def video_frame(self):
         """Отдет фрейм из видео потока"""
-        return self.cam.read()
+        return self.frame
+
+    def video_loop(self):
+        """ Чтение потока с камеры """
+        while True:
+            ok, frame = self.cam.read()
+            if ok:
+                self.frame = frame
 
 
 class Application:
@@ -105,10 +115,10 @@ class Application:
         self.face_detection_worker = FaceDetection()
         threading.Thread(target=self.face_detection_worker.worker, daemon=True).start()
 
-        self.video_loop()
         self.log_faces()
+        self.main_video_loop()
 
-    def video_loop(self):
+    def main_video_loop(self):
         """Получаем видеофрейм из потока, конвертируем для отображения и открываем его в Tkinter"""
         if self.signal_take_snapshot:                   # Запись Скриншота
             self._save_snapshot()
@@ -118,7 +128,7 @@ class Application:
             self.signal_take_video_sample = False
         else:                                         # Отправляем кадры на общий поток с распознаванием и в Tkinter
             self._face_detection()
-        self.root.after(1, self.video_loop)
+        self.root.after(10, self.main_video_loop)
 
     def log_faces(self):
         """Проверяет статус обнаружения объекта (Лица)"""
@@ -133,24 +143,20 @@ class Application:
         self.signal_take_snapshot = True
 
     def _save_snapshot(self):
-        ok, frame = self.vs.video_frame()
-        if ok:
-            cv2_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
-            image = Image.fromarray(cv2_frame)
-            snap = image.convert("RGB")
+        frame = self.vs.video_frame()
+        cv2_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
+        image = Image.fromarray(cv2_frame)
+        snap = image.convert("RGB")
 
-            ts = datetime.datetime.now()
-            filename = "{}.jpg".format(ts.strftime("%Y-%m-%d_%H-%M-%S"))
-            self.logger.debug(f"Write snapshot to: {self.output_path}{filename}")
-            p = os.path.join(self.output_path, filename)
+        ts = datetime.datetime.now()
+        filename = "{}.jpg".format(ts.strftime("%Y-%m-%d_%H-%M-%S"))
+        self.logger.debug(f"Write snapshot to: {self.output_path}{filename}")
+        p = os.path.join(self.output_path, filename)
 
-            snap.save(p, "JPEG")
+        snap.save(p, "JPEG")
 
-            self.text.insert(tk.END, f"Сохранен файл: {filename}" + "\n")
-            self.logger.debug(f"Сохранен файл изображение: {self.output_path}{filename}")
-        else:
-            self.text.insert(tk.END, "Неудача :(\n")
-            self.logger.error(f"Ошибка записи!")
+        self.text.insert(tk.END, f"Сохранен файл: {filename}" + "\n")
+        self.logger.debug(f"Сохранен файл изображение: {self.output_path}{filename}")
 
     def take_video(self):
         """FUTURE Functional"""
@@ -164,9 +170,8 @@ class Application:
         self.text.insert(tk.END, f"Идет запись видео семпла - {VIDEO_SAMPLE_LONG} секунд" + "\n")
 
         while True:
-            ok, frame = self.vs.video_frame()
-            if ok:
-                video_out.write(frame)
+            frame = self.vs.video_frame()
+            video_out.write(frame)
             if ts + datetime.timedelta(seconds=VIDEO_SAMPLE_LONG) < datetime.datetime.now():
                 self.logger.debug("Запись завершена!")
                 self.text.insert(tk.END, "Запись завершена!\n")
@@ -176,18 +181,17 @@ class Application:
         self.logger.info(f"Сохранен файл видео: {self.output_path}{filename}")
 
     def _face_detection(self):
-        ok, frame = self.vs.video_frame()
-        if ok:
-            self.frame_counter += 1
-            if self.frame_counter >= 20:
-                self.face_detection_worker.q.put(frame) # Отправляем в очередь каждый 20 кадр
-                self.frame_counter = 0
+        frame = self.vs.video_frame()
+        self.frame_counter += 1
+        if self.frame_counter >= 20:
+            self.face_detection_worker.q.put(frame)     # Отправляем в очередь каждый 20 кадр
+            self.frame_counter = 0
 
-            cv2_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
-            self.current_image = Image.fromarray(cv2_frame)
-            imgtk = ImageTk.PhotoImage(image=self.current_image)
-            self.panel.imgtk = imgtk
-            self.panel.config(image=imgtk)
+        cv2_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
+        self.current_image = Image.fromarray(cv2_frame)
+        imgtk = ImageTk.PhotoImage(image=self.current_image)
+        self.panel.imgtk = imgtk
+        self.panel.config(image=imgtk)
 
     def destructor(self):
         """Завершаем все процессы"""
