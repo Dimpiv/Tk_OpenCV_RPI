@@ -7,7 +7,6 @@ import os
 import queue
 import threading
 import tkinter as tk
-
 import cv2
 from PIL import Image, ImageTk
 
@@ -110,7 +109,7 @@ class Application:
         btn = tk.Button(self.root, text="Сохранить кадр", command=self.take_snapshot)
         btn.pack(fill=tk.BOTH, padx=10, pady=5)
 
-        btn = tk.Button(self.root, text="Записать видео", command=self.take_video)
+        btn = tk.Button(self.root, text=f"Записать видео {VIDEO_SAMPLE_LONG} сек. (СТОП ПРОСМОТР)", command=self.take_video)
         btn.pack(fill=tk.BOTH, padx=10, pady=5)
 
         self.frame_counter = 0      # For Face Detection
@@ -144,8 +143,8 @@ class Application:
     def face_detection(self):
         """ Отправляет в очередь на распознования лица в кадре """
         frame = self.vs.video_frame()
-        self.face_detection_worker.q.put(frame)     # Отправляем в очередь на распознование каждые 0.5 сек.
-        self.root.after(500, self.face_detection)
+        self.face_detection_worker.q.put(frame)     # Отправляем в очередь на распознование каждые 1 сек.
+        self.root.after(1000, self.face_detection)
 
     def take_snapshot(self):
         """ Сигнал для сохранения скриншота """
@@ -187,14 +186,14 @@ class Application:
                 self.logger.debug("Запись завершена!")
                 self.text.insert(tk.END, "Запись завершена!\n")
                 break
-
         self.text.insert(tk.END, f"Сохранен файл: {filename}" + "\n")
         self.logger.info(f"Сохранен файл видео: {self.output_path}{filename}")
 
     def _show_video(self):
         """ Передает полученный фрейм видеопотка в Tkinter """
         frame = self.vs.video_frame()
-        cv2_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
+        # cv2_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
+        cv2_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)      # Вроде работает пошустрее ???
         self.current_image = Image.fromarray(cv2_frame)
         imgtk = ImageTk.PhotoImage(image=self.current_image)
         self.panel.imgtk = imgtk
