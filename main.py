@@ -114,7 +114,9 @@ class Application:
         btn.pack(fill=tk.BOTH, padx=10, pady=5)
 
         btn = tk.Button(
-            self.root, text=f"Записать видео {VIDEO_SAMPLE_LONG} сек. (СТОП ПРОСМОТР)", command=self.take_video
+            self.root,
+            text=f"Записать видео {VIDEO_SAMPLE_LONG} сек. (СТОП ПРОСМОТР)",
+            command=self.take_video,
         )
         btn.pack(fill=tk.BOTH, padx=10, pady=5)
 
@@ -159,6 +161,23 @@ class Application:
     def _save_snapshot(self):
         """Сохраняет скриншот в качестве имени timestamp"""
         frame = self.vs.video_frame()
+
+        if self.face_detection_worker.face_detect:
+            text = "Face is detect :)"
+        else:
+            text = "Face not found"
+
+        cv2.putText(
+            frame,
+            text=text,
+            org=(20, 30),
+            fontFace=cv2.FONT_HERSHEY_COMPLEX,
+            color=(255, 255, 255),
+            fontScale=0.8,
+            thickness=2,
+            lineType=cv2.LINE_AA,
+        )
+
         cv2_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
         image = Image.fromarray(cv2_frame)
         snap = image.convert("RGB")
