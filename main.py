@@ -31,20 +31,21 @@ class FaceDetection:
     def worker(self):
         while True:
             frame = self.q.get()
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            faces = self.face_cascade.detectMultiScale(
-                gray,
-                scaleFactor=1.1,
-                minNeighbors=5,
-                minSize=(30, 30),
-            )
-
-            if not isinstance(faces, tuple):
-                self.face_detect = True
-            else:
-                self.face_detect = False
-
+            self.face_detect = self.recognition_frame(frame)
             self.q.task_done()
+
+    def recognition_frame(self, frame):
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = self.face_cascade.detectMultiScale(
+            gray,
+            scaleFactor=1.1,
+            minNeighbors=5,
+            minSize=(30, 30),
+        )
+
+        if not isinstance(faces, tuple):
+            return True
+        return False
 
 
 class CamCV:
@@ -59,11 +60,14 @@ class CamCV:
             raise ValueError("Не удается открыть поток с камеры", self.cam)
 
         self.frame = None
+        self.manual_detection = False
 
         self.log.debug(f"Установленное разрешение камеры: {WIGHT}X{HEIGHT}")
         self.cam.set(3, WIGHT)
         self.cam.set(4, HEIGHT)
         self.cam.set(5, FPS)
+
+        self.fc = FaceDetection()
 
         threading.Thread(target=self.video_loop, daemon=False).start()
 
@@ -81,6 +85,22 @@ class CamCV:
         while self.run:
             ok, frame = self.cam.read()
             if ok:
+                if self.manual_detection:
+                    if self.fc.recognition_frame(frame):
+                        text = "Face is detect :)"
+                    else:
+                        text = "Face not found"
+                    cv2.putText(
+                        frame,
+                        text=text,
+                        org=(20, 30),
+                        fontFace=cv2.FONT_HERSHEY_COMPLEX,
+                        color=(255, 255, 255),
+                        fontScale=0.8,
+                        thickness=2,
+                        lineType=cv2.LINE_AA,
+                    )
+
                 self.frame = frame
 
 
@@ -120,7 +140,6 @@ class Application:
         )
         btn.pack(fill=tk.BOTH, padx=10, pady=5)
 
-        self.frame_counter = 0  # For Face Detection
         self.face_detection_worker = FaceDetection()
         threading.Thread(target=self.face_detection_worker.worker, daemon=True).start()
 
@@ -201,9 +220,8 @@ class Application:
         ts = datetime.datetime.now()
         filename = "{}.avi".format(ts.strftime("%Y-%m-%d_%H-%M-%S"))
         video_out = cv2.VideoWriter(filename, cv2.VideoWriter_fourcc("M", "J", "P", "G"), FPS, (WIGHT, HEIGHT))
-        self.logger.debug("Старт записи видео!")
-        self.text.insert(tk.END, f"Идет запись видео семпла - {VIDEO_SAMPLE_LONG} секунд" + "\n")
 
+        self.vs.manual_detection = True
         while True:
             frame = self.vs.video_frame()
             video_out.write(frame)
@@ -211,6 +229,8 @@ class Application:
                 self.logger.debug("Запись завершена!")
                 self.text.insert(tk.END, "Запись завершена!\n")
                 break
+        self.vs.manual_detection = False
+
         self.text.insert(tk.END, f"Сохранен файл: {filename}" + "\n")
         self.logger.info(f"Сохранен файл видео: {self.output_path}{filename}")
 
