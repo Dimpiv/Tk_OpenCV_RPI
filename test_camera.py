@@ -200,9 +200,9 @@ class Application:
         # cv2_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
         cv2_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)  # Вроде работает пошустрее ???
         self.current_image = Image.fromarray(cv2_frame)
-        imgtk = ImageTk.PhotoImage(image=self.current_image)
-        self.panel.imgtk = imgtk
-        self.panel.config(image=imgtk)
+        img_tk = ImageTk.PhotoImage(image=self.current_image)
+        self.panel.img_tk = img_tk
+        self.panel.config(image=img_tk)
 
     def destructor(self):
         """Завершаем все процессы"""
