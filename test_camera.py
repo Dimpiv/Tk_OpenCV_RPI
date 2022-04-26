@@ -60,31 +60,13 @@ class CamCV:
         self.cam.set(4, HEIGHT)
         self.cam.set(5, FPS)
 
-        self.counter = 0
-        # self.video_save = cv2.VideoWriter()
-
-        self.face_detection_worker = FaceDetection()
-        threading.Thread(target=self.face_detection_worker.worker, daemon=True).start()
-
     def __del__(self):
         """Закрываем поток с камеры"""
         self.cam.release()
 
-    def video_frame(self, video_writer=False):
+    def video_frame(self):
         """Отдет фрейм из видео потока"""
-        ok, frame = self.cam.read()
-        if video_writer:
-            return ok, frame
-        if ok:
-            self.counter += 1
-            if self.counter >= 20:
-                self.face_detection_worker.q.put(frame)
-                self.counter = 0
-            return ok, cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)  # convert colors from BGR to RGBA
-        return None, None
-
-    def get_face_detect(self):
-        return self.face_detection_worker.face_detect
+        return self.cam.read()
 
 
 class Application:
@@ -119,6 +101,10 @@ class Application:
         btn = tk.Button(self.root, text="Записать видео", command=self.take_video)
         btn.pack(fill=tk.BOTH, padx=10, pady=5)
 
+        self.frame_counter = 0      # For Face Detection
+        self.face_detection_worker = FaceDetection()
+        threading.Thread(target=self.face_detection_worker.worker, daemon=True).start()
+
         self.video_loop()
         self.log_faces()
 
@@ -130,19 +116,13 @@ class Application:
         if self.signal_take_video_sample:               # Запись Видеосемпла
             self._save_video()
             self.signal_take_video_sample = False
-        # else:                                         # Отправляем кадры на общий поток с распознаванием и в Tkinter
-        #     ok, cv2_frame = self.vs.video_frame()
-        #     if ok:
-        #         self.current_image = Image.fromarray(cv2_frame)
-        #         imgtk = ImageTk.PhotoImage(image=self.current_image)
-        #         self.panel.imgtk = imgtk
-        #         self.panel.config(image=imgtk)
-
+        else:                                         # Отправляем кадры на общий поток с распознаванием и в Tkinter
+            self._face_detection()
         self.root.after(1, self.video_loop)
 
     def log_faces(self):
         """Проверяет статус обнаружения объекта (Лица)"""
-        if self.vs.get_face_detect():
+        if self.face_detection_worker.face_detect:
             self.string_face_detection.set("Лицо в кадре!")
         else:
             self.string_face_detection.set("Никого нет")
@@ -153,8 +133,9 @@ class Application:
         self.signal_take_snapshot = True
 
     def _save_snapshot(self):
-        ok, cv2_frame = self.vs.video_frame()
+        ok, frame = self.vs.video_frame()
         if ok:
+            cv2_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
             image = Image.fromarray(cv2_frame)
             snap = image.convert("RGB")
 
@@ -183,9 +164,9 @@ class Application:
         self.text.insert(tk.END, f"Идет запись видео семпла - {VIDEO_SAMPLE_LONG} секунд" + "\n")
 
         while True:
-            ok, raw_frame = self.vs.video_frame(video_writer=True)
+            ok, frame = self.vs.video_frame()
             if ok:
-                video_out.write(raw_frame)
+                video_out.write(frame)
             if ts + datetime.timedelta(seconds=VIDEO_SAMPLE_LONG) < datetime.datetime.now():
                 self.logger.debug("Запись завершена!")
                 self.text.insert(tk.END, "Запись завершена!\n")
@@ -193,6 +174,20 @@ class Application:
 
         self.text.insert(tk.END, f"Сохранен файл: {filename}" + "\n")
         self.logger.info(f"Сохранен файл видео: {self.output_path}{filename}")
+
+    def _face_detection(self):
+        ok, frame = self.vs.video_frame()
+        if ok:
+            self.frame_counter += 1
+            if self.frame_counter >= 20:
+                self.face_detection_worker.q.put(frame) # Отправляем в очередь каждый 20 кадр
+                self.frame_counter = 0
+
+            cv2_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
+            self.current_image = Image.fromarray(cv2_frame)
+            imgtk = ImageTk.PhotoImage(image=self.current_image)
+            self.panel.imgtk = imgtk
+            self.panel.config(image=imgtk)
 
     def destructor(self):
         """Завершаем все процессы"""
