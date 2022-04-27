@@ -44,8 +44,8 @@ class FaceDetection:
         )
 
         if not isinstance(faces, tuple):
-            return True
-        return False
+            return True, faces
+        return False, None
 
 
 class CamCV:
@@ -86,10 +86,15 @@ class CamCV:
             ok, frame = self.cam.read()
             if ok:
                 if self.manual_detection:
-                    if self.fc.recognition_frame(frame):
+                    ok, faces = self.fc.recognition_frame(frame)
+                    if ok:
                         text = "Face is detect :)"
                     else:
                         text = "Face not found"
+
+                    for (x, y, w, h) in faces:
+                        cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 255, 0), 2)
+
                     cv2.putText(
                         frame,
                         text=text,
