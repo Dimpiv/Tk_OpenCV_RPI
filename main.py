@@ -13,10 +13,6 @@ import cv2
 from PIL import Image, ImageTk
 
 LOG_FORMAT = "%(levelname)-8s %(name)-12s %(message)s"
-WIGHT, HEIGHT = (640, 480)
-VIDEO_SAMPLE_LONG = 10
-FPS = 15
-
 logging.basicConfig(level=logging.DEBUG, format=LOG_FORMAT)
 
 
@@ -44,8 +40,8 @@ class FaceDetection:
         )
 
         if not isinstance(faces, tuple):
-            return True, faces
-        return False, None
+            return True
+        return False
 
 
 class CamCV:
@@ -55,19 +51,17 @@ class CamCV:
         self.log = logging.getLogger("Cam_app")
         self.run = True
 
-        self.cam = cv2.VideoCapture(0)
+        self.cam = cv2.VideoCapture(
+            "v4l2src device=/dev/video0 ! video/x-raw,format=(string)UYVY,"
+            " width=(int)1920, height=(int)1080,framerate=(fraction)30/1 !"
+            " videoscale ! video/x-raw,width=640,height=480 ! videoconvert !"
+            " video/x-raw, format=(string)BGR ! appsink"
+        )
         if not self.cam.isOpened():
             raise ValueError("Не удается открыть поток с камеры", self.cam)
 
         self.frame = None
         self.manual_detection = False
-
-        self.log.debug(f"Установленное разрешение камеры: {WIGHT}X{HEIGHT}")
-        self.cam.set(3, WIGHT)
-        self.cam.set(4, HEIGHT)
-        self.cam.set(5, FPS)
-
-        self.fc = FaceDetection()
 
         threading.Thread(target=self.video_loop, daemon=False).start()
 
@@ -83,30 +77,7 @@ class CamCV:
     def video_loop(self):
         """Чтение потока с камеры"""
         while self.run:
-            ok, frame = self.cam.read()
-            if ok:
-                if self.manual_detection:
-                    ok, faces = self.fc.recognition_frame(frame)
-                    if ok:
-                        text = "Face is detect :)"
-                    else:
-                        text = "Face not found"
-
-                    for (x, y, w, h) in faces:
-                        cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 255, 0), 2)
-
-                    cv2.putText(
-                        frame,
-                        text=text,
-                        org=(20, 30),
-                        fontFace=cv2.FONT_HERSHEY_COMPLEX,
-                        color=(255, 255, 255),
-                        fontScale=0.8,
-                        thickness=2,
-                        lineType=cv2.LINE_AA,
-                    )
-
-                self.frame = frame
+            _, self.frame = self.cam.read()
 
 
 class Application:
@@ -138,13 +109,6 @@ class Application:
         btn = tk.Button(self.root, text="Сохранить кадр", command=self.take_snapshot)
         btn.pack(fill=tk.BOTH, padx=10, pady=5)
 
-        btn = tk.Button(
-            self.root,
-            text=f"Записать видео {VIDEO_SAMPLE_LONG} сек. (СТОП ПРОСМОТР)",
-            command=self.take_video,
-        )
-        btn.pack(fill=tk.BOTH, padx=10, pady=5)
-
         self.face_detection_worker = FaceDetection()
         threading.Thread(target=self.face_detection_worker.worker, daemon=True).start()
 
@@ -157,9 +121,6 @@ class Application:
         if self.signal_take_snapshot:  # Запись Скриншота
             self._save_snapshot()
             self.signal_take_snapshot = False
-        if self.signal_take_video_sample:  # Запись Видеосемпла
-            self._save_video()
-            self.signal_take_video_sample = False
         else:  # Отправляем кадры на общий поток с распознаванием и в Tkinter
             self._show_video()
         self.root.after(10, self.main_video_loop)
@@ -216,35 +177,12 @@ class Application:
         self.text.insert(tk.END, f"Сохранен файл: {filename}" + "\n")
         self.logger.debug(f"Сохранен файл изображение: {self.output_path}{filename}")
 
-    def take_video(self):
-        """Сигнал для запуска записи видео"""
-        self.signal_take_video_sample = True
-
-    def _save_video(self):
-        """Сохраняет видео в качестве имени timestamp  !!! BAD БЛОКИРУЮЩИЙ МЕТОД"""
-        ts = datetime.datetime.now()
-        filename = "{}.avi".format(ts.strftime("%Y-%m-%d_%H-%M-%S"))
-        video_out = cv2.VideoWriter(filename, cv2.VideoWriter_fourcc("M", "J", "P", "G"), FPS, (WIGHT, HEIGHT))
-
-        self.vs.manual_detection = True
-        while True:
-            frame = self.vs.video_frame()
-            video_out.write(frame)
-            if ts + datetime.timedelta(seconds=VIDEO_SAMPLE_LONG) < datetime.datetime.now():
-                self.logger.debug("Запись завершена!")
-                self.text.insert(tk.END, "Запись завершена!\n")
-                break
-        self.vs.manual_detection = False
-
-        self.text.insert(tk.END, f"Сохранен файл: {filename}" + "\n")
-        self.logger.info(f"Сохранен файл видео: {self.output_path}{filename}")
-
     def _show_video(self):
         """Передает полученный фрейм видеопотка в Tkinter"""
         frame = self.vs.video_frame()
         # cv2_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
-        cv2_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)  # Вроде работает пошустрее ???
-        self.current_image = Image.fromarray(cv2_frame)
+        # cv2_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)  # Вроде работает пошустрее ???
+        self.current_image = Image.fromarray(frame)
         img_tk = ImageTk.PhotoImage(image=self.current_image)
         self.panel.img_tk = img_tk
         self.panel.config(image=img_tk)
