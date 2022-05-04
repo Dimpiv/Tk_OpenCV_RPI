@@ -180,9 +180,9 @@ class Application:
     def _show_video(self):
         """Передает полученный фрейм видеопотка в Tkinter"""
         frame = self.vs.video_frame()
-        # cv2_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
+        cv2_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
         # cv2_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)  # Вроде работает пошустрее ???
-        self.current_image = Image.fromarray(frame)
+        self.current_image = Image.fromarray(cv2_frame)
         img_tk = ImageTk.PhotoImage(image=self.current_image)
         self.panel.img_tk = img_tk
         self.panel.config(image=img_tk)
