@@ -14,4 +14,8 @@
 `v4l2-ctl --device /dev/video0 --list-formats-ext - Вывод форматов поддерживаемых камерой`
 
 #### RUN
+`git clone https://github.com/Dimpiv/Tk_OpenCV_RPI.git`
+
+`cd Tk_OpenCV_RPI`
+
 `python3 main.py`
